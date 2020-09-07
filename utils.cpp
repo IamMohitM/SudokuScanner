@@ -28,72 +28,16 @@ void drawConvexContours(cv::Mat& image, const contourVector& contours){
         ++index;
     }
 }
-std::tuple<cv::Point, cv::Point, cv::Point, cv::Point> findDiagonalPoints(const contourType& contour){
-    int minXCoord, maxXCoord, minYCoord, maxYCoord;
-
-    cv::Point topLeft;
-    cv::Point topRight;
-    cv::Point bottomLeft;
-    cv::Point bottomRight;
-
-
-    auto [minX, maxX] = std::minmax_element(contour.begin(), contour.end(),[](const cv::Point& a, const cv::Point& b){
-        return a.x < b.x;
-    });
-
-
-    auto [minY, maxY] = std::minmax_element(contour.begin(), contour.end(),[](const cv::Point& a, const cv::Point& b){
-        return a.y < b.y;
-    });
-
-    minXCoord = (*minX).x;
-    maxXCoord = (*maxX).x;
-    minYCoord = (*minY).y;
-    maxYCoord = (*maxY).y;
-
-    int minYPoint{maxYCoord}, maxYPoint{minYPoint}, minXPoint{maxXCoord}, maxXPoint{minXPoint};
-    for(const auto& point: contour){
-        if(point.x==minXCoord){
-            if(point.y<=minYPoint){
-                minYPoint = point.y;
-                topLeft = point;
-            }
-        }
-
-        if(point.x==maxXCoord){
-            if(point.y>=maxYPoint){
-                maxYPoint = point.y;
-                bottomRight = point;
-            }
-        }
-
-        if(point.y==minYCoord){
-            if(point.x>=maxXPoint){
-                maxXPoint = point.x;
-                topRight = point;
-            }
-        }
-
-        if(point.y==maxYCoord){
-            if(point.x>=minXPoint){
-                minXPoint = point.x;
-                bottomLeft = point;
-            }
-        }
-    }
-
-    return std::make_tuple(topLeft, topRight, bottomRight, bottomLeft);
-}
 
 void detectEdges(cv::Mat& inputImage, cv::Mat& processedImage, const cv::Size& filterSize,
-                 int cannyMinThresh, int cannyMaxThresh, int cannyAperture, bool blur, bool debug){
+                 int cannyMinThresh, int cannyMaxThresh, int cannyAperture, bool blur){
     if(blur){
         cv::GaussianBlur(inputImage, processedImage, filterSize, 1, 1);
     }
     cv::Canny(processedImage, processedImage, cannyMinThresh, cannyMaxThresh, cannyAperture, true);
 }
 
-void drawHoughLines(cv::Mat& inputImage, int houghThresh, int houghMinLength, bool debug){
+void drawHoughLines(cv::Mat& inputImage, int houghThresh, int houghMinLength){
     lineType edgeLines;
     cv::HoughLinesP(inputImage, edgeLines, 1, CV_PI/180, houghThresh, houghMinLength, 1);
     drawLines(inputImage, edgeLines);
@@ -105,7 +49,6 @@ int getMaxContourIndex(const contourVector& contours){
                                                                     return cv::contourArea(c1) < cv::contourArea(c2);
                                                               }));
 }
-
 
 std::tuple<cv::Point, cv::Point, cv::Point, cv::Point> getExtremePoints(const contourType& contour){
     cv::Point extLeft  = *min_element(contour.begin(), contour.end(),
@@ -128,15 +71,47 @@ std::tuple<cv::Point, cv::Point, cv::Point, cv::Point> getExtremePoints(const co
     return std::make_tuple(extLeft, extRight, extTop, extBot);
 }
 
-void divideSudokuGrid(const cv::Mat& sudokuGrid){
-    int cellWidth = sudokuGrid.cols/9;
-    int cellHeight = sudokuGrid.rows/9;
-    for(int i=0;i < sudokuGrid.cols - cellWidth+1; i+=cellWidth){
-        for(int j=0; j<sudokuGrid.rows- cellHeight+1; j+=cellHeight){
-            cv::Mat cellImg = sudokuGrid(cv::Rect(i, j, cellWidth, cellHeight));
-            cv::imshow( std::to_string(i+1) + ", " + std::to_string(j+1), cellImg);
+void divideSudokuGrid(const cv::Mat& graySudokuGrid, const cv::Mat& sudokuGrid){
+//    cv::cvtColor(sudokuGrid, graySudokuGrid, cv::COLOR_BGR2GRAY);
+
+    contourVector contours;
+    int cellWidth = graySudokuGrid.cols / 9;
+    int cellHeight = graySudokuGrid.rows / 9;
+    cv::Size resize = cv::Size(96, 96);
+    cv::Mat labelImage(cv::Size(cellWidth, cellHeight), CV_32S), stats, centroids;
+    double maxArea = -100;
+    cv::Mat morphed, cellImg, cellColor, extractedImg, mask(labelImage.size(), CV_8UC1, cv::Scalar(0));
+    auto kernel = cv::getStructuringElement(2, cv::Size(7, 7));
+    cv::Rect rect;
+
+    for(int i=0; i < graySudokuGrid.cols; i+=cellWidth){
+        for(int j=0; j < graySudokuGrid.rows; j+=cellHeight){
+            cellImg = graySudokuGrid(cv::Rect(i, j, cellWidth, cellHeight));
+            cellColor = sudokuGrid(cv::Rect(i, j, cellWidth, cellHeight));
+
+            cv::morphologyEx(cellImg, morphed, cv::MORPH_CLOSE, kernel);
+            cv::threshold(morphed, morphed, 128, 255, cv::THRESH_BINARY_INV);
+            int nlabels = cv::connectedComponentsWithStats(morphed, labelImage, stats, centroids, 8, CV_32S);
+            for(int label = 1; label<nlabels; ++label){
+                if(maxArea < stats.at<int>(label, cv::CC_STAT_AREA)){
+                    mask = labelImage==label;
+                    maxArea = stats.at<int>(label, cv::CC_STAT_AREA);
+                }
+            }
+
+            cv::Mat roi(cellImg.size(), cellImg.type(), cv::Scalar(0));
+            roi.setTo(cv::Scalar(255), mask);
+            cv::findContours(roi, contours, cv::noArray(), cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+            rect = cv::boundingRect(contours[0]);
+            extractedImg = cellColor(rect);
+
+            cv::imshow( std::to_string(i) + ", " + std::to_string(j), extractedImg);
+            cv::moveWindow(std::to_string(i) + ", " + std::to_string(j), i+cellWidth, j+cellHeight);
+            maxArea = -100;
+            mask = cv::Scalar(0);
         }
     }
+
 }
 
 void drawCirclePoints(cv::Mat& image, cv::Point2f* points, int totalPoints){
