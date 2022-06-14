@@ -1,0 +1,42 @@
+{
+    "gaussian_kernel_size": [
+        7,
+        7
+    ],
+    "gaussian_sigma": 15.0,
+    "approximation_epsilon": 0.05,
+    "canny_aperture_size": 5,
+    "canny_min_threshold": 200,
+    "canny_max_threshold": 230,
+    "minimum_contour_area_proportion": 0.1,
+    "frame_shape": [
+        720,
+        1280
+    ],
+    "video_path": "inputs/sudoku_2.mov",
+    "hough": {
+        "rho": 5,
+        "theta": 0.01745329252,
+        "threshold": 200,
+        "min_line_length": 50,
+        "max_line_gap": 15
+    },
+    "colors" : {
+        "RED": [0, 0, 255],
+        "BLUE": [255, 0, 0],
+        "GREEN": [0, 255, 0],
+        "WHITE": [255, 255, 255],
+        "BLACK": [0, 0, 0]
+    },
+    "warp":{
+        "height": 500,
+        "width": 500
+    },
+    "grid_param":{
+        "guassian_kernel_size": [3, 3],
+        "gaussian_sigma": 10.0,
+        "canny_aperture_size": 3,
+        "canny_min_threshold": 50,
+        "canny_max_threshold": 100
+    }
+}
