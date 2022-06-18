@@ -57,3 +57,6 @@ def is_rect(top_left, top_right, bottom_right, bottom_left):
     return similar_length(top_right[0] - top_left[0], bottom_right[0]-bottom_left[0]) and \
         similar_length(bottom_right[1]-top_right[1], bottom_left[1] - top_left[1])
     
+
+# TODO: Add distance
+# TODO: Add expand rectangle

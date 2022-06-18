@@ -1,12 +1,11 @@
-from cv2 import blur
-from matplotlib.pyplot import gray
 import numpy as np
 import cv2
 from contour import ContourUtil
 import os
 import utils
 import logging
-
+from python_research import Color
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -43,17 +42,29 @@ class SudokuScanner(object):
         self.grid_canny_threshold_2 = grid_config["canny_max_threshold"]
         self.grid_canny_aperture_size = grid_config["canny_aperture_size"]
 
+    def distance(self, p, q):
+        return math.sqrt((p[0]-q[0])**2 + (p[1]-q[1])**2)
+
+    def compute_bounding_diagonals(self, contours):
+        distances = []
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            distances.append(self.distance((x, y), (x+w, y+h)))
+        return distances
+
     def preprocess(self, img):
         gray_frame = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        # blur_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        # high sigma needed because only interested in edges
         blur_frame = cv2.GaussianBlur(
             gray_frame, self.gaussian_kernel_size, self.gaussian_sigma)
 
         return gray_frame, blur_frame
 
-    def find_number(self, img: np.ndarray):
-        pass
+    def draw_bounding_rects(self, img, contours, color = Color.WHITE.value):
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            cv2.rectangle(img, (x,y), (x+w, y+h), color = color, thickness=1)
+        return img
+
 
     def find_grid_cells(self, img: np.ndarray):
         gray_frame = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -63,8 +74,8 @@ class SudokuScanner(object):
         edge_image = cv2.Canny(blur_frame, self.grid_canny_threshold_1, self.grid_canny_threshold_2,
                                apertureSize=self.grid_canny_aperture_size, L2gradient=True)
 
-        edge_image = cv2.morphologyEx(edge_image, cv2.MORPH_CLOSE, np.ones(
-            (3, 3), dtype=np.uint8,), iterations=3)
+        edge_image = cv2.morphologyEx(edge_image, cv2.MORPH_DILATE, np.ones(
+            (3, 3), dtype=np.uint8,), iterations=1)
 
         contours, hierarchy = cv2.findContours(
             edge_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
@@ -78,35 +89,49 @@ class SudokuScanner(object):
         contour_areas, _, _ = contour_util.compute_contour_stats(
             child_contour_ids)
 
+        zero_img = np.zeros_like(img)
+
+        max_area_condition = contour_areas < (0.012 * img_area)
+
         sorted_areas = np.sort(
-            contour_areas[contour_areas < 0.013 * img_area])
+            contour_areas[max_area_condition])
         diff = np.diff(sorted_areas)
-        partition_value = sorted_areas[np.argwhere(
+        area_partition_value = sorted_areas[np.argwhere(
             diff == diff.max())[0].item()]
 
-        condition = (contour_areas <= partition_value)
-        # number_contours = child_contours[condition]
+        partition_condition = (contour_areas <= area_partition_value) & max_area_condition
 
-        number_areas = contour_areas[condition]
-        number_area_mean = np.mean(number_areas)
+        number_areas = contour_areas[partition_condition]
+        number_area_mean = np.median(number_areas)
         number_area_std = np.std(number_areas)
-        # contour_areas, contour_area_mean, contour_area_std = contour_util.compute_contour_stats(
-        #     condition)
-        condition = (contour_areas <= (number_area_mean + 1.5 * number_area_std)
-                     ) & (contour_areas >= (number_area_mean - 1.5 * number_area_std))
+
+        condition = (contour_areas <= (number_area_mean + (1 * number_area_std))
+                     ) & (contour_areas >= (number_area_mean - (1 * number_area_std)))
 
         number_contours = child_contours[condition]
 
-        #TODO: identify the coordinates where numbers are detected
-        zero_img = np.zeros_like(img)
-        cv2.drawContours(zero_img, contourIdx=-1,
-                            contours=contours, color=(0, 255, 0))
-        cv2.drawContours(zero_img, contourIdx=-1,
-                            contours=child_contours, color=(255, 0, 0))
-        cv2.drawContours(zero_img, contourIdx=-1,
-                            contours=number_contours, color=(0, 0, 255))
 
-        return zero_img
+        number_contour_diagonals = np.array(self.compute_bounding_diagonals(number_contours))
+        max_diagonal = 0.12 * self.distance((0, 0), (500, 500))
+        
+        diagonal_condition = number_contour_diagonals <= max_diagonal
+        final_numbers = number_contours[diagonal_condition]
+        
+        #TODO: identify the coordinates where numbers are detected
+        #detected contours - green
+        cv2.drawContours(zero_img, contourIdx=-1,
+                            contours=contours, color=Color.GREEN.value)
+        #contours at bottom of hierarchy - blue 
+        cv2.drawContours(zero_img, contourIdx=-1,
+                            contours=child_contours, color= Color.BLUE.value)
+        
+        #contours predicted as numers - red
+        cv2.drawContours(zero_img, contourIdx=-1,
+                            contours=final_numbers, color=Color.RED.value)
+
+        self.draw_bounding_rects(zero_img, final_numbers)
+
+        return zero_img, final_numbers
 
     def find_straight_edges(self, img: np.ndarray) -> np.ndarray:
         blur_frame = cv2.Canny(img, self.canny_threshold_1, self.canny_threshold_2,
@@ -218,7 +243,9 @@ class SudokuScanner(object):
                 key = cv2.waitKey(0)
 
             if key == ord('y') or key == ord('Y'):
-                number_img = self.find_grid_cells(sudoku_img)
+                number_img, number_contours = self.find_grid_cells(sudoku_img)
+                if len(number_contours) < 16:
+                    continue
                 cv2.imshow("numbers", number_img)
                 
                 key = cv2.waitKey(0) & 0xff
