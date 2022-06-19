@@ -59,12 +59,28 @@ class SudokuScanner(object):
 
         return gray_frame, blur_frame
 
-    def draw_bounding_rects(self, img, contours, color = Color.WHITE.value):
+    def draw_bounding_rects(self, img, contours, color=Color.WHITE.value):
         for contour in contours:
             x, y, w, h = cv2.boundingRect(contour)
-            cv2.rectangle(img, (x,y), (x+w, y+h), color = color, thickness=1)
+            cv2.rectangle(img, (x, y), (x+w, y+h), color=color, thickness=1)
         return img
 
+    def find_grid_coords(self, contours, img_shape=(500, 500)):
+        # img_shape - (height, width)
+        row_division = np.linspace(0, img_shape[0], 10)
+        column_division = np.linspace(0, img_shape[1], 10)
+
+        xs = []
+        ys = []
+        for contour in contours:
+            x, y, _, _ = cv2.boundingRect(contour)
+            xs.append(x)
+            ys.append(y)
+
+        columns = np.digitize(xs, column_division, right=True)
+        rows = np.digitize(ys, row_division, right=True)
+
+        return list(zip(rows, columns))
 
     def find_grid_cells(self, img: np.ndarray):
         gray_frame = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -99,7 +115,8 @@ class SudokuScanner(object):
         area_partition_value = sorted_areas[np.argwhere(
             diff == diff.max())[0].item()]
 
-        partition_condition = (contour_areas <= area_partition_value) & max_area_condition
+        partition_condition = (
+            contour_areas <= area_partition_value) & max_area_condition
 
         number_areas = contour_areas[partition_condition]
         number_area_mean = np.median(number_areas)
@@ -110,28 +127,28 @@ class SudokuScanner(object):
 
         number_contours = child_contours[condition]
 
-
-        number_contour_diagonals = np.array(self.compute_bounding_diagonals(number_contours))
+        number_contour_diagonals = np.array(
+            self.compute_bounding_diagonals(number_contours))
         max_diagonal = 0.12 * self.distance((0, 0), (500, 500))
-        
+
         diagonal_condition = number_contour_diagonals <= max_diagonal
         final_numbers = number_contours[diagonal_condition]
-        
-        #TODO: identify the coordinates where numbers are detected
-        #detected contours - green
+
+        # TODO: identify the coordinates where numbers are detected
+        # detected contours - green
         cv2.drawContours(zero_img, contourIdx=-1,
-                            contours=contours, color=Color.GREEN.value)
-        #contours at bottom of hierarchy - blue 
+                         contours=contours, color=Color.GREEN.value)
+        # contours at bottom of hierarchy - blue
         cv2.drawContours(zero_img, contourIdx=-1,
-                            contours=child_contours, color= Color.BLUE.value)
-        
-        #contours predicted as numers - red
+                         contours=child_contours, color=Color.BLUE.value)
+
+        # contours predicted as numers - red
         cv2.drawContours(zero_img, contourIdx=-1,
-                            contours=final_numbers, color=Color.RED.value)
+                         contours=final_numbers, color=Color.RED.value)
 
         self.draw_bounding_rects(zero_img, final_numbers)
-
-        return zero_img, final_numbers
+        indexes = self.find_grid_coords(final_numbers, img.shape)
+        return zero_img, final_numbers, indexes
 
     def find_straight_edges(self, img: np.ndarray) -> np.ndarray:
         blur_frame = cv2.Canny(img, self.canny_threshold_1, self.canny_threshold_2,
@@ -243,11 +260,12 @@ class SudokuScanner(object):
                 key = cv2.waitKey(0)
 
             if key == ord('y') or key == ord('Y'):
-                number_img, number_contours = self.find_grid_cells(sudoku_img)
+                number_img, number_contours, indexes = self.find_grid_cells(
+                    sudoku_img)
                 if len(number_contours) < 16:
                     continue
                 cv2.imshow("numbers", number_img)
-                
+
                 key = cv2.waitKey(0) & 0xff
 
                 if key == ord("q") or key == ord('Q'):
