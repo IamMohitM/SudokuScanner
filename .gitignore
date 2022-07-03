@@ -4,3 +4,9 @@ cmake-build-debug/
 build/
 .DS_Store
 main.out.dsYM/
+
+temp/
+*__pycache__/
+
+*.mov
+*.png

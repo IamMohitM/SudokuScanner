@@ -4,7 +4,7 @@
         7
     ],
     "gaussian_sigma": 15.0,
-    "approximation_epsilon": 0.05,
+    "approximation_epsilon": 0.03,
     "canny_aperture_size": 5,
     "canny_min_threshold": 200,
     "canny_max_threshold": 230,
@@ -38,5 +38,11 @@
         "canny_aperture_size": 3,
         "canny_min_threshold": 50,
         "canny_max_threshold": 100
+    },
+    "serving":{
+        "host": "localhost",
+        "port": 8081,
+        "grpc_port": 8084,
+        "model_name": "digitmodel"
     }
 }

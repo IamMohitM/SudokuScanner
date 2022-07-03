@@ -1,6 +1,14 @@
 import cv2
+import math
 import numpy as np
 
+
+def crop_img(img, top_left, bottom_right):
+    x1,y1= top_left
+    x2, y2 = bottom_right
+    return img[y1:y2, x1:x2]
+
+    
 def draw_lines(image, lines, color=(0, 0, 255)):
     if lines is None:
         return image
@@ -57,6 +65,11 @@ def is_rect(top_left, top_right, bottom_right, bottom_left):
     return similar_length(top_right[0] - top_left[0], bottom_right[0]-bottom_left[0]) and \
         similar_length(bottom_right[1]-top_right[1], bottom_left[1] - top_left[1])
     
+def distance(p, q):
+        return math.sqrt((p[0]-q[0])**2 + (p[1]-q[1])**2)
 
+
+def img_area(img):
+    return img.shape[0] * img.shape[1]
 # TODO: Add distance
 # TODO: Add expand rectangle
