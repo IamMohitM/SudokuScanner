@@ -71,20 +71,21 @@ class SudokuScanner(object):
 
     def is_number_cell(self, img):
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        _, thresh_img = cv2.threshold(gray_img, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+        _, thresh_img = cv2.threshold(
+            gray_img, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
 
         thresh_img = clear_border(thresh_img)
 
-        min_area = utils.img_area(thresh_img) *  0.05
+        min_area = utils.img_area(thresh_img) * 0.05
 
-        if (thresh_img==255).sum() >= min_area:
+        if (thresh_img == 255).sum() >= min_area:
             return True
-            
+
         return False
 
     def identify_grid_cells(self, img: np.ndarray):
         img = cv2.GaussianBlur(
-                img, self.grid_gaussian_kernel_size, self.grid_gaussian_sigma)
+            img, self.grid_gaussian_kernel_size, self.grid_gaussian_sigma)
         rows, columns = img.shape[:2]
         row_split = np.linspace(0, rows, 10)
         column_split = np.linspace(0, columns, 10)
@@ -97,7 +98,8 @@ class SudokuScanner(object):
                 bottom_right = (col_right, row_bottom)
                 cropped_img = utils.crop_img(img, top_left, bottom_right)
                 if self.is_number_cell(cropped_img):
-                    pred = self.digit_prediction.make_grpc_prediction(cropped_img)
+                    pred = self.digit_prediction.make_grpc_prediction(
+                        cropped_img)
                     logger.info(f"Cell: ({row+1}, {column+1}) - {pred}")
                     prediction[(row+1, column+1)] = pred
 
@@ -210,13 +212,13 @@ class SudokuScanner(object):
             if sudoku_img is not None:
                 cv2.imshow("sudoku image", sudoku_img)
 
-                key = cv2.waitKey(0)
+                key = cv2.waitKey(0) & 0xff
 
             if key == ord('y') or key == ord('Y'):
                 predictions = self.identify_grid_cells(
                     sudoku_img)
                 logger.info(predictions)
-
+                break
             elif key == ord("q") or key == ord("Q"):
                 break
 
@@ -224,3 +226,14 @@ class SudokuScanner(object):
 
         self.cap.release()
         cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    import json
+    log_format = "%(levelname)s [%(lineno)s] [%(message)s]"
+    logging.basicConfig(format=log_format, level=logging.DEBUG)
+    with open("configs/config.json", 'r') as f:
+        config = json.load(f)
+    sudoku_scanner = SudokuScanner(config)
+    sudoku_scanner.run()
+    pass

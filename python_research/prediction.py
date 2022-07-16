@@ -29,10 +29,11 @@ class DigitPredictor:
         return make_tensor_proto(img).tensor_content
 
     def make_grpc_prediction(self, img):
-        img = torch.from_numpy(img.astype(np.float32)).permute(2, 0, 1)
-        image_as_bytes = self.convert_to_bytes(img)
 
-        input_data = {"data": image_as_bytes, "shape": str(tuple(img.shape)).encode('utf-8')}
+        image = torch.from_numpy(img.astype(np.float32)).permute(2, 0, 1)
+        image_as_bytes = self.convert_to_bytes(image)
+
+        input_data = {"data": image_as_bytes, "shape": str(tuple(image.shape)).encode('utf-8')}
         
 
         prediction = self.grpc_stub.Predictions(inference_pb2.PredictionsRequest(model_name=self.model_name, input = input_data))
